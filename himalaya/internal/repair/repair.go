@@ -1,3 +1,7 @@
+// Copyright 2021 The Swarm Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package repair
 
 import (
@@ -5,8 +9,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/ethersphere/bee-repair/collection/entry"
 	cmdfile "github.com/ethersphere/bee-repair/file"
+	"github.com/ethersphere/bee-repair/himalaya/internal/collection/entry"
 	"github.com/ethersphere/bee/pkg/file"
 	"github.com/ethersphere/bee/pkg/file/joiner"
 	"github.com/ethersphere/bee/pkg/file/loadsave"

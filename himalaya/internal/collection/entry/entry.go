@@ -8,7 +8,7 @@ import (
 	"errors"
 	"math"
 
-	"github.com/ethersphere/bee-repair/collection"
+	"github.com/ethersphere/bee-repair/himalaya/internal/collection"
 	"github.com/ethersphere/bee/pkg/encryption"
 	"github.com/ethersphere/bee/pkg/swarm"
 )

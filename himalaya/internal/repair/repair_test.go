@@ -1,3 +1,7 @@
+// Copyright 2021 The Swarm Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package repair_test
 
 import (
@@ -10,8 +14,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ethersphere/bee-repair/collection/entry"
-	"github.com/ethersphere/bee-repair/repair"
+	"github.com/ethersphere/bee-repair/himalaya/internal/collection/entry"
+	"github.com/ethersphere/bee-repair/himalaya/internal/repair"
 	"github.com/ethersphere/bee/pkg/file/loadsave"
 	"github.com/ethersphere/bee/pkg/file/splitter"
 	"github.com/ethersphere/bee/pkg/manifest"

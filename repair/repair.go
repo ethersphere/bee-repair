@@ -22,36 +22,61 @@ const (
 	limitMetadataLength = swarm.ChunkSize
 )
 
+// ProgressUpdater is and interface which can be implemented by client to recieve
+// updates from the utility
 type ProgressUpdater interface {
 	Update(string)
 }
 
+// Option is used to supply functional options for the repairer utility
 type Option func(*Repairer)
 
-func WithApiStore(host string, port int, useSSL bool) Option {
+// WithAPIStore is used to configure the API endpoint for running the utility. This
+// could be locally running bee node or some gateway
+func WithAPIStore(host string, port int, useSSL bool) Option {
 	return func(c *Repairer) {
 		c.store = cmdfile.NewApiStore(host, port, useSSL)
 	}
 }
 
+// WithLogger is used to supply optional logger to see debug messages
 func WithLogger(l logging.Logger) Option {
 	return func(c *Repairer) {
 		c.logger = l
 	}
 }
 
+// WithEncryption is used to enable encryption while creating data
 func WithEncryption(val bool) Option {
 	return func(c *Repairer) {
 		c.encrypt = val
 	}
 }
 
+// WithProgressUpdater is used to provide updater implementation to see updates
+// from utility
 func WithProgressUpdater(upd ProgressUpdater) Option {
 	return func(c *Repairer) {
 		c.updater = upd
 	}
 }
 
+// FileRepair takes in an older file reference and creates a new manifest which contains
+// the file and the metadata. This reference can be then used to query the /bzz endpoint to
+// serve the file
+//
+// Old Entry:
+// collection -> file reference -> file bytes
+//           |
+//           |-> metadata reference -> metadata bytes
+//
+// New Entry:
+// mantaray manifest -> Root Node (\) -> Metadata (index file)
+//                  |
+//                  |-> file entry -> Metadata (Filename, ContentType)
+//                                |
+//                                |-> File reference
+//
 func FileRepair(ctx context.Context, addr swarm.Address, opts ...Option) (swarm.Address, error) {
 	r := newWithOptions(opts...)
 
@@ -99,6 +124,23 @@ func FileRepair(ctx context.Context, addr swarm.Address, opts ...Option) (swarm.
 	return newReference, nil
 }
 
+// DirectoryRepair takes in an older directory reference and creates a new manifest which contains
+// all the files and the metadata. This reference can be then used to query the /bzz endpoint to
+// serve the index document or /bzz/{reference}/{path} to query individual files
+//
+// Old Entry:
+// mantaray manifest -> Root Node (/) -> Metadata (index file/error file)
+//                   |
+//                   |-> file entry -> collection -> file reference -> file bytes
+//                                               |
+//                                               |-> metadata reference -> metadata bytes
+// New Entry:
+// mantaray manifest -> Root Node (/) -> Metadata (index file)
+//                  |
+//                  |-> file entry -> Metadata (Filename, ContentType)
+//                                |
+//                                |-> File reference
+//
 func DirectoryRepair(ctx context.Context, addr swarm.Address, opts ...Option) (swarm.Address, error) {
 	r := newWithOptions(opts...)
 
@@ -149,6 +191,7 @@ loop:
 	return newReference, nil
 }
 
+// Repairer is the implementation of the repairer utility
 type Repairer struct {
 	store   cmdfile.PutGetter
 	ls      file.LoadSaver
@@ -195,6 +238,7 @@ type dirEntry struct {
 	errC   <-chan error
 }
 
+// read the file entry present in the old format
 func (r *Repairer) getOldFileEntry(ctx context.Context, addr swarm.Address) (*fileEntry, error) {
 	buf := bytes.NewBuffer(nil)
 	writeCloser := cmdfile.NopWriteCloser(buf)
@@ -242,6 +286,7 @@ func (r *Repairer) getOldFileEntry(ctx context.Context, addr swarm.Address) (*fi
 	}, nil
 }
 
+// read the directory present in old format
 func (r *Repairer) getOldDirectoryEntry(ctx context.Context, addr swarm.Address) (*dirEntry, error) {
 	j, _, err := joiner.New(ctx, r.store, addr)
 	if err != nil {

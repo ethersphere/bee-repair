@@ -7,7 +7,7 @@ package entry_test
 import (
 	"testing"
 
-	"github.com/ethersphere/bee-repair/collection/entry"
+	"github.com/ethersphere/bee-repair/internal/collection/entry"
 	"github.com/ethersphere/bee/pkg/swarm/test"
 )
 

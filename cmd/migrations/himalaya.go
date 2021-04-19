@@ -2,11 +2,11 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package himalaya
+package migrations
 
 import (
-	cmdfile "github.com/ethersphere/bee-repair/file"
-	"github.com/ethersphere/bee-repair/himalaya/internal/repair"
+	"github.com/ethersphere/bee-repair/internal/repair"
+	cmdfile "github.com/ethersphere/bee-repair/pkg/file"
 	"github.com/ethersphere/bee/pkg/logging"
 	"github.com/ethersphere/bee/pkg/swarm"
 	"github.com/spf13/cobra"
@@ -100,7 +100,7 @@ The input is the hex representation of the swarm hash passed as argument, the re
 	},
 }
 
-func InitCommands(rootCmd *cobra.Command) {
+func InitHimalayaCommands(rootCmd *cobra.Command) {
 	c := &cobra.Command{
 		Use:   "himalaya",
 		Short: "Used to repair broken swarm references upto bee v0.5.3",

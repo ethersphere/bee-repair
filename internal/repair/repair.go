@@ -9,8 +9,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	cmdfile "github.com/ethersphere/bee-repair/file"
-	"github.com/ethersphere/bee-repair/himalaya/internal/collection/entry"
+	"github.com/ethersphere/bee-repair/internal/collection/entry"
+	cmdfile "github.com/ethersphere/bee-repair/pkg/file"
 	"github.com/ethersphere/bee/pkg/file"
 	"github.com/ethersphere/bee/pkg/file/joiner"
 	"github.com/ethersphere/bee/pkg/file/loadsave"
@@ -39,7 +39,7 @@ type Option func(*Repairer)
 // could be locally running bee node or some gateway
 func WithAPIStore(host string, port int, useSSL bool) Option {
 	return func(c *Repairer) {
-		c.store = cmdfile.NewApiStore(host, port, useSSL)
+		c.store = cmdfile.NewAPIStore(host, port, useSSL)
 	}
 }
 
@@ -210,7 +210,7 @@ func (n *noopUpdater) Update(_ string) {}
 
 func defaultOpts(c *Repairer) {
 	if c.store == nil {
-		c.store = cmdfile.NewApiStore("127.0.0.1", 1633, false)
+		c.store = cmdfile.NewAPIStore("127.0.0.1", 1633, false)
 	}
 	if c.updater == nil {
 		c.updater = &noopUpdater{}

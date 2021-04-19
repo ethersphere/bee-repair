@@ -5,25 +5,9 @@
 package main
 
 import (
-	"fmt"
-	"os"
-
-	"github.com/ethersphere/bee-repair/himalaya"
-	"github.com/spf13/cobra"
+	"github.com/ethersphere/bee-repair/cmd/migrations"
 )
 
 func main() {
-	c := &cobra.Command{
-		Short:        "Used to repair broken swarm references",
-		SilenceUsage: true,
-	}
-
-	himalaya.InitCommands(c)
-
-	c.SetOutput(c.OutOrStdout())
-	err := c.Execute()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		os.Exit(1)
-	}
+	migrations.Run()
 }

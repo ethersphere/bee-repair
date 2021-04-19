@@ -14,8 +14,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ethersphere/bee-repair/himalaya/internal/collection/entry"
-	"github.com/ethersphere/bee-repair/himalaya/internal/repair"
+	"github.com/ethersphere/bee-repair/internal/collection/entry"
+	"github.com/ethersphere/bee-repair/internal/repair"
 	"github.com/ethersphere/bee/pkg/file/loadsave"
 	"github.com/ethersphere/bee/pkg/file/splitter"
 	"github.com/ethersphere/bee/pkg/manifest"

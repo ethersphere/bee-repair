@@ -1,4 +1,4 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
+// Copyright 2021 The Swarm Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -13,7 +13,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"path/filepath"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -48,79 +47,16 @@ type PutGetter interface {
 	storage.Getter
 }
 
-// TeeStore provides a storage.Putter that can put to multiple underlying storage.Putters.
-type TeeStore struct {
-	putters []storage.Putter
-}
-
-// NewTeeStore creates a new TeeStore.
-func NewTeeStore() *TeeStore {
-	return &TeeStore{}
-}
-
-// Add adds a storage.Putter.
-func (t *TeeStore) Add(putter storage.Putter) {
-	t.putters = append(t.putters, putter)
-}
-
-// Put implements storage.Putter.
-func (t *TeeStore) Put(ctx context.Context, mode storage.ModePut, chs ...swarm.Chunk) (exist []bool, err error) {
-	for _, putter := range t.putters {
-		_, err := putter.Put(ctx, mode, chs...)
-		if err != nil {
-			return nil, err
-		}
-	}
-	exist = make([]bool, len(chs))
-	return exist, nil
-}
-
-// FsStore provides a storage.Putter that writes chunks directly to the filesystem.
-// Each chunk is a separate file, where the hex address of the chunk is the file name.
-type FsStore struct {
-	path string
-}
-
-// NewFsStore creates a new FsStore.
-func NewFsStore(path string) PutGetter {
-	return &FsStore{
-		path: path,
-	}
-}
-
-// Put implements storage.Putter.
-func (f *FsStore) Put(ctx context.Context, mode storage.ModePut, chs ...swarm.Chunk) (exist []bool, err error) {
-	for _, ch := range chs {
-		chunkPath := filepath.Join(f.path, ch.Address().String())
-		err := ioutil.WriteFile(chunkPath, ch.Data(), 0o666)
-		if err != nil {
-			return nil, err
-		}
-	}
-	exist = make([]bool, len(chs))
-	return exist, nil
-}
-
-// Get implements storage.Getter.
-func (f *FsStore) Get(ctx context.Context, mode storage.ModeGet, address swarm.Address) (ch swarm.Chunk, err error) {
-	chunkPath := filepath.Join(f.path, address.String())
-	data, err := ioutil.ReadFile(chunkPath)
-	if err != nil {
-		return nil, err
-	}
-	return swarm.NewChunk(address, data), nil
-}
-
-// ApiStore provies a storage.Putter that adds chunks to swarm through the HTTP chunk API.
-type ApiStore struct {
+// APIStore provies a storage.Putter that adds chunks to swarm through the HTTP chunk API.
+type APIStore struct {
 	Client  *http.Client
 	baseUrl string
 }
 
-// NewApiStore creates a new ApiStore.
-func NewApiStore(host string, port int, ssl bool) PutGetter {
+// NewAPIStore creates a new APIStore.
+func NewAPIStore(host string, port int, tls bool) PutGetter {
 	scheme := "http"
-	if ssl {
+	if tls {
 		scheme += "s"
 	}
 	u := &url.URL{
@@ -128,18 +64,23 @@ func NewApiStore(host string, port int, ssl bool) PutGetter {
 		Scheme: scheme,
 		Path:   "chunks",
 	}
-	return &ApiStore{
+	return &APIStore{
 		Client:  http.DefaultClient,
 		baseUrl: u.String(),
 	}
 }
 
 // Put implements storage.Putter.
-func (a *ApiStore) Put(ctx context.Context, mode storage.ModePut, chs ...swarm.Chunk) (exist []bool, err error) {
+func (a *APIStore) Put(ctx context.Context, mode storage.ModePut, chs ...swarm.Chunk) (exist []bool, err error) {
 	for _, ch := range chs {
 		buf := bytes.NewReader(ch.Data())
 		url := strings.Join([]string{a.baseUrl}, "/")
-		res, err := a.Client.Post(url, "application/octet-stream", buf)
+		req, err := http.NewRequestWithContext(ctx, "POST", url, buf)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/octet-stream")
+		res, err := a.Client.Do(req)
 		if err != nil {
 			return nil, err
 		}
@@ -152,10 +93,14 @@ func (a *ApiStore) Put(ctx context.Context, mode storage.ModePut, chs ...swarm.C
 }
 
 // Get implements storage.Getter.
-func (a *ApiStore) Get(ctx context.Context, mode storage.ModeGet, address swarm.Address) (ch swarm.Chunk, err error) {
+func (a *APIStore) Get(ctx context.Context, mode storage.ModeGet, address swarm.Address) (ch swarm.Chunk, err error) {
 	addressHex := address.String()
 	url := strings.Join([]string{a.baseUrl, addressHex}, "/")
-	res, err := http.DefaultClient.Get(url)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	res, err := a.Client.Do(req)
 	if err != nil {
 		return nil, err
 	}

@@ -1,4 +1,4 @@
-// Copyright 2020 The Swarm Authors. All rights reserved.
+// Copyright 2021 The Swarm Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -10,19 +10,16 @@ import (
 	"io/ioutil"
 	"net/http/httptest"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strconv"
 	"testing"
 
-	cmdfile "github.com/ethersphere/bee-repair/file"
+	cmdfile "github.com/ethersphere/bee-repair/pkg/file"
 	"github.com/ethersphere/bee/pkg/api"
 	"github.com/ethersphere/bee/pkg/logging"
 	statestore "github.com/ethersphere/bee/pkg/statestore/mock"
 	"github.com/ethersphere/bee/pkg/storage"
 	"github.com/ethersphere/bee/pkg/storage/mock"
 	testingc "github.com/ethersphere/bee/pkg/storage/testing"
-	"github.com/ethersphere/bee/pkg/swarm"
 	"github.com/ethersphere/bee/pkg/tags"
 )
 
@@ -30,9 +27,9 @@ const (
 	hashOfFoo = "2387e8e7d8a48c2a9339c97c1dc3461a9a7aa07e994c5cb8b38fd7c1b3e6ea48"
 )
 
-// TestApiStore verifies that the api store layer does not distort data, and that same
+// TestAPIStore verifies that the api store layer does not distort data, and that same
 // data successfully posted can be retrieved from http backend.
-func TestApiStore(t *testing.T) {
+func TestAPIStore(t *testing.T) {
 	storer := mock.NewStorer()
 	ctx := context.Background()
 	srvUrl := newTestServer(t, storer)
@@ -42,7 +39,7 @@ func TestApiStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := cmdfile.NewApiStore(host, port, false)
+	a := cmdfile.NewAPIStore(host, port, false)
 
 	ch := testingc.GenerateTestRandomChunk()
 	_, err = a.Put(ctx, storage.ModePutUpload, ch)
@@ -59,72 +56,6 @@ func TestApiStore(t *testing.T) {
 	}
 	if !ch.Equal(chResult) {
 		t.Fatal("chunk mismatch")
-	}
-}
-
-// TestFsStore verifies that the fs store layer does not distort data, and that the
-// resulting stored data matches what is submitted.
-func TestFsStore(t *testing.T) {
-	tmpPath, err := ioutil.TempDir("", "cli-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpPath)
-	storer := cmdfile.NewFsStore(tmpPath)
-	chunkAddr := swarm.MustParseHexAddress(hashOfFoo)
-	chunkData := []byte("foo")
-	ch := swarm.NewChunk(chunkAddr, chunkData)
-
-	ctx := context.Background()
-	_, err = storer.Put(ctx, storage.ModePutUpload, ch)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	chunkFilename := filepath.Join(tmpPath, hashOfFoo)
-	chunkDataResult, err := ioutil.ReadFile(chunkFilename)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	chResult := swarm.NewChunk(chunkAddr, chunkDataResult)
-	if !ch.Equal(chResult) {
-		t.Fatal("chunk mismatch")
-	}
-}
-
-// TestTeeStore verifies that the TeeStore writes to all added stores.
-func TestTeeStore(t *testing.T) {
-	storeFee := mock.NewStorer()
-	storeFi := mock.NewStorer()
-	storeFo := mock.NewStorer()
-	storeFum := cmdfile.NewTeeStore()
-	storeFum.Add(storeFee)
-	storeFum.Add(storeFi)
-	storeFum.Add(storeFo)
-
-	chunkAddr := swarm.MustParseHexAddress(hashOfFoo)
-	chunkData := []byte("foo")
-	ch := swarm.NewChunk(chunkAddr, chunkData)
-
-	ctx := context.Background()
-	var err error
-	_, err = storeFum.Put(ctx, storage.ModePutUpload, ch)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = storeFee.Get(ctx, storage.ModeGetRequest, chunkAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = storeFi.Get(ctx, storage.ModeGetRequest, chunkAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = storeFo.Get(ctx, storage.ModeGetRequest, chunkAddr)
-	if err != nil {
-		t.Fatal(err)
 	}
 }
 

@@ -57,6 +57,13 @@ func WithEncryption(val bool) Option {
 	}
 }
 
+// WithPin is used to enable encryption while creating data
+func WithPin(val bool) Option {
+	return func(c *Repairer) {
+		c.pin = val
+	}
+}
+
 // WithProgressUpdater is used to provide updater implementation to see updates
 // from utility
 func WithProgressUpdater(upd ProgressUpdater) Option {
@@ -201,6 +208,7 @@ type Repairer struct {
 	ls      file.LoadSaver
 	logger  logging.Logger
 	encrypt bool
+	pin     bool
 	updater ProgressUpdater
 }
 
@@ -226,7 +234,11 @@ func newWithOptions(opts ...Option) *Repairer {
 		opt(r)
 	}
 	defaultOpts(r)
-	r.ls = loadsave.New(r.store, storage.ModePutUpload, r.encrypt)
+	mode := storage.ModePutUpload
+	if r.pin {
+		mode = storage.ModePutUploadPin
+	}
+	r.ls = loadsave.New(r.store, mode, r.encrypt)
 	return r
 }
 

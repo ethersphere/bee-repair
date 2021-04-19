@@ -23,6 +23,7 @@ var (
 	ssl       bool   // flag variable, uses https for api if set
 	verbosity string // flag variable, debug level
 	encrypted bool   // flag variable, uses encryption
+	pin       bool   // flag variable, pins the repaired content
 	logger    logging.Logger
 )
 
@@ -125,6 +126,7 @@ Example:
 	c.PersistentFlags().BoolVar(&ssl, "ssl", false, "use ssl")
 	c.PersistentFlags().StringVar(&verbosity, "info", "0", "log verbosity level 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=trace")
 	c.PersistentFlags().BoolVar(&encrypted, "encrypt", false, "use encryption")
+	c.PersistentFlags().BoolVar(&pin, "pin", false, "pin the repaired content")
 
 	c.AddCommand(fileRepair)
 	c.AddCommand(directoryRepair)

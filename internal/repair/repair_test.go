@@ -25,45 +25,84 @@ import (
 )
 
 type fEntry struct {
-	name        string
-	filename    string
-	dir         string
-	contentType string
-	size        int64
-	reference   swarm.Address
+	name         string
+	filename     string
+	dir          string
+	contentType  string
+	size         int64
+	reference    swarm.Address
+	expectedPins int
 }
 
 func TestFileRepair(t *testing.T) {
 	testFiles := []fEntry{
 		{
-			name:        "file single chunk",
-			filename:    "simple.txt",
-			contentType: "text/plain; charset=utf-8",
-			size:        swarm.ChunkSize,
+			name:         "file single chunk",
+			filename:     "simple.txt",
+			contentType:  "text/plain; charset=utf-8",
+			size:         swarm.ChunkSize,
+			expectedPins: 3,
 		},
 		{
-			name:        "file multiple chunks",
-			filename:    "simple.jpeg",
-			contentType: "image/jpeg; charset=utf-8",
-			size:        swarm.ChunkSize * 5,
+			name:         "file multiple chunks",
+			filename:     "simple.jpeg",
+			contentType:  "image/jpeg; charset=utf-8",
+			size:         swarm.ChunkSize * 5,
+			expectedPins: 3,
 		},
 		{
 			// Filename is bigger than what single node in manifest can hold
-			name:        "file large name",
-			filename:    "135c88465b7b6da82c134dafc093e6248956d5c003cd8e3566f3d952a0d26180",
-			contentType: "image/jpeg; charset=utf-8",
-			size:        swarm.ChunkSize / 2,
+			name:         "file large name",
+			filename:     "135c88465b7b6da82c134dafc093e6248956d5c003cd8e3566f3d952a0d26180",
+			contentType:  "image/jpeg; charset=utf-8",
+			size:         swarm.ChunkSize / 2,
+			expectedPins: 5,
 		},
 		{
-			name:        "file tar format",
-			filename:    "simple.tar",
-			contentType: "application/x-tar",
-			size:        swarm.ChunkSize * 10,
+			name:         "file tar format",
+			filename:     "simple.tar",
+			contentType:  "application/x-tar",
+			size:         swarm.ChunkSize * 10,
+			expectedPins: 3,
 		},
 	}
 
+	validateManifest := func(t *testing.T, store storage.Storer, newReference swarm.Address, f *fEntry) {
+		ctx := context.Background()
+		m, err := manifest.NewDefaultManifestReference(
+			newReference,
+			loadsave.New(store, storage.ModePutUpload, false),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rootEntry, err := m.Lookup(ctx, manifest.RootPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rootEntry.Metadata()[manifest.WebsiteIndexDocumentSuffixKey] != f.filename {
+			t.Fatal("Invalid manifest root entry")
+		}
+
+		fileEntry, err := m.Lookup(ctx, f.filename)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fileEntry.Reference().String() != f.reference.String() {
+			t.Fatalf("Invalid manifest file reference, Exp: %s Found: %s",
+				fileEntry.Reference(), f.reference)
+		}
+		if fileEntry.Metadata()[manifest.EntryMetadataFilenameKey] != f.filename {
+			t.Fatal("Invalid manifest file metadata: Filename")
+		}
+		if fileEntry.Metadata()[manifest.EntryMetadataContentTypeKey] != f.contentType {
+			t.Fatal("Invalid manifest file metadata: ContentType")
+		}
+
+	}
 	for _, f := range testFiles {
-		t.Run(f.name, func(t *testing.T) {
+		t.Run(f.name+"/without_pin", func(t *testing.T) {
 
 			ctx := context.Background()
 			store := mock.NewStorer()
@@ -82,35 +121,44 @@ func TestFileRepair(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			m, err := manifest.NewDefaultManifestReference(
-				newReference,
-				loadsave.New(store, storage.ModePutUpload, false),
+			validateManifest(t, store, newReference, &f)
+
+			pins, err := store.PinnedChunks(ctx, 0, 10)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(pins) != 0 {
+				t.Fatalf("unexpected pin count, expected: %d got: %d", 0, len(pins))
+			}
+		})
+		t.Run(f.name+"/with_pin", func(t *testing.T) {
+
+			ctx := context.Background()
+			store := mock.NewStorer()
+
+			oldReference, err := createFileOldFormat(ctx, store, &f)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			newReference, err := repair.FileRepair(
+				ctx,
+				oldReference,
+				repair.WithMockStore(store),
+				repair.WithPin(true),
 			)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			rootEntry, err := m.Lookup(ctx, manifest.RootPath)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if rootEntry.Metadata()[manifest.WebsiteIndexDocumentSuffixKey] != f.filename {
-				t.Fatal("Invalid manifest root entry")
-			}
+			validateManifest(t, store, newReference, &f)
 
-			fileEntry, err := m.Lookup(ctx, f.filename)
+			pins, err := store.PinnedChunks(ctx, 0, 10)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if fileEntry.Reference().String() != f.reference.String() {
-				t.Fatalf("Invalid manifest file reference, Exp: %s Found: %s",
-					fileEntry.Reference(), f.reference)
-			}
-			if fileEntry.Metadata()[manifest.EntryMetadataFilenameKey] != f.filename {
-				t.Fatal("Invalid manifest file metadata: Filename")
-			}
-			if fileEntry.Metadata()[manifest.EntryMetadataContentTypeKey] != f.contentType {
-				t.Fatal("Invalid manifest file metadata: ContentType")
+			if len(pins) != f.expectedPins {
+				t.Fatalf("unexpected pin count, expected: %d got: %d", f.expectedPins, len(pins))
 			}
 		})
 	}
@@ -126,13 +174,15 @@ func (s *countUpdater) Update(_ string) {
 
 func TestDirectoryRepair(t *testing.T) {
 	testDirs := []struct {
-		name      string
-		indexFile string
-		errorFile string
-		files     []*fEntry
+		name         string
+		indexFile    string
+		errorFile    string
+		files        []*fEntry
+		expectedPins int
 	}{
 		{
-			name: "directory simple",
+			name:         "directory simple",
+			expectedPins: 5,
 			files: []*fEntry{
 				{
 					filename:    "simple.txt",
@@ -147,9 +197,10 @@ func TestDirectoryRepair(t *testing.T) {
 			},
 		},
 		{
-			name:      "directory multiple",
-			indexFile: "b.jpeg",
-			errorFile: "a.txt",
+			name:         "directory multiple",
+			expectedPins: 10,
+			indexFile:    "b.jpeg",
+			errorFile:    "a.txt",
 			files: []*fEntry{
 				{
 					filename:    "a.txt",
@@ -190,33 +241,8 @@ func TestDirectoryRepair(t *testing.T) {
 	}
 
 	for _, d := range testDirs {
-		t.Run(d.name, func(t *testing.T) {
-
+		validateManifest := func(t *testing.T, store storage.Storer, newReference swarm.Address) {
 			ctx := context.Background()
-			store := mock.NewStorer()
-
-			oldReference, err := createDirOldFormat(ctx, store, d.indexFile, d.errorFile, d.files)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			updater := &countUpdater{}
-
-			newReference, err := repair.DirectoryRepair(
-				ctx,
-				oldReference,
-				repair.WithMockStore(store),
-				repair.WithProgressUpdater(updater),
-			)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			// We get 1 update msg per file
-			if updater.msgCount != len(d.files) {
-				t.Fatal("Progress updater update mismatch")
-			}
-
 			m, err := manifest.NewDefaultManifestReference(
 				newReference,
 				loadsave.New(store, storage.ModePutUpload, false),
@@ -256,6 +282,81 @@ func TestDirectoryRepair(t *testing.T) {
 				if fileEntry.Metadata()[manifest.EntryMetadataContentTypeKey] != v.contentType {
 					t.Fatal("Invalid manifest file metadata: ContentType")
 				}
+			}
+		}
+		t.Run(d.name+"/without_pin", func(t *testing.T) {
+
+			ctx := context.Background()
+			store := mock.NewStorer()
+
+			oldReference, err := createDirOldFormat(ctx, store, d.indexFile, d.errorFile, d.files)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			updater := &countUpdater{}
+
+			newReference, err := repair.DirectoryRepair(
+				ctx,
+				oldReference,
+				repair.WithMockStore(store),
+				repair.WithProgressUpdater(updater),
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// We get 1 update msg per file
+			if updater.msgCount != len(d.files) {
+				t.Fatal("Progress updater update mismatch")
+			}
+
+			validateManifest(t, store, newReference)
+
+			pins, err := store.PinnedChunks(ctx, 0, 10)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(pins) != 0 {
+				t.Fatalf("unexpected pin count, expected: %d got: %d", 0, len(pins))
+			}
+		})
+		t.Run(d.name+"/with_pin", func(t *testing.T) {
+
+			ctx := context.Background()
+			store := mock.NewStorer()
+
+			oldReference, err := createDirOldFormat(ctx, store, d.indexFile, d.errorFile, d.files)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			updater := &countUpdater{}
+
+			newReference, err := repair.DirectoryRepair(
+				ctx,
+				oldReference,
+				repair.WithMockStore(store),
+				repair.WithProgressUpdater(updater),
+				repair.WithPin(true),
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// We get 1 update msg per file
+			if updater.msgCount != len(d.files) {
+				t.Fatal("Progress updater update mismatch")
+			}
+
+			validateManifest(t, store, newReference)
+
+			pins, err := store.PinnedChunks(ctx, 0, 10)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(pins) != d.expectedPins {
+				t.Fatalf("unexpected pin count, expected: %d got: %d", d.expectedPins, len(pins))
 			}
 		})
 	}

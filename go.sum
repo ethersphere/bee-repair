@@ -153,6 +153,8 @@ github.com/ethereum/go-ethereum v1.9.23 h1:SIKhg/z4Q7AbvqcxuPYvMxf36che/Rq/Pp0Id
 github.com/ethereum/go-ethereum v1.9.23/go.mod h1:JIfVb6esrqALTExdz9hRYvrP0xBDf6wCncIu1hNwHpM=
 github.com/ethersphere/bee v0.5.3 h1:/CbqmFwUYuketq3lfb+3waEi9pM3rQyEVMu3yBHoRrE=
 github.com/ethersphere/bee v0.5.3/go.mod h1:VYxqKlm0jveiqdPWwzinMFnWVwPBvOxQaLJ8qyHrU1A=
+github.com/ethersphere/bee v0.5.4-0.20210419211605-a63f64b18fd5 h1:QzrYBRslmkr7AOMChepi/i55yYgQIxKsyGnDOZ2y5E4=
+github.com/ethersphere/bee v0.5.4-0.20210419211605-a63f64b18fd5/go.mod h1:gzfTZ2r1K0et+qGmKmQIpOt2HGEBhHgZ4fIjV86SG1w=
 github.com/ethersphere/bmt v0.1.4 h1:+rkWYNtMgDx6bkNqGdWu+U9DgGI1rRZplpSW3YhBr1Q=
 github.com/ethersphere/bmt v0.1.4/go.mod h1:Yd8ft1U69WDuHevZc/rwPxUv1rzPSMpMnS6xbU53aY8=
 github.com/ethersphere/go-sw3-abi v0.3.2/go.mod h1:BmpsvJ8idQZdYEtWnvxA8POYQ8Rl/NhyCdF0zLMOOJU=

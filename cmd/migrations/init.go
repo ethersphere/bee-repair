@@ -13,7 +13,7 @@ import (
 
 func Run() {
 	c := &cobra.Command{
-		Short:        "Used to repair broken swarm references",
+		Short:        "Helper tool to perform bee migrations",
 		SilenceUsage: true,
 	}
 

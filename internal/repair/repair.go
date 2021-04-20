@@ -57,7 +57,7 @@ func WithEncryption(val bool) Option {
 	}
 }
 
-// WithPin is used to enable encryption while creating data
+// WithPin is used to enable pinning while creating data
 func WithPin(val bool) Option {
 	return func(c *Repairer) {
 		c.pin = val

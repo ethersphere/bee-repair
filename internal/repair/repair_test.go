@@ -464,5 +464,35 @@ func createDirOldFormat(
 	if err != nil {
 		return swarm.ZeroAddress, err
 	}
-	return newManifest, nil
+	// Create a new collection entry for holding the manifest
+	s := splitter.NewSimpleSplitter(store, storage.ModePutUpload)
+
+	mMtdt := entry.NewMetadata(newManifest.String())
+	mMtdt.MimeType = m.Type()
+	manifestMtdtBytes, err := json.Marshal(mMtdt)
+	if err != nil {
+		return swarm.ZeroAddress, err
+	}
+	metadataBuf := bytes.NewBuffer(manifestMtdtBytes)
+	metadataReader := io.LimitReader(metadataBuf, int64(len(manifestMtdtBytes)))
+	metadataReadCloser := ioutil.NopCloser(metadataReader)
+	metadataAddr, err := s.Split(ctx, metadataReadCloser, int64(len(manifestMtdtBytes)), false)
+	if err != nil {
+		return swarm.ZeroAddress, err
+	}
+
+	mEntry := entry.New(newManifest, metadataAddr)
+	manifestEntryBytes, err := mEntry.MarshalBinary()
+	if err != nil {
+		return swarm.ZeroAddress, err
+	}
+	entryBuf := bytes.NewBuffer(manifestEntryBytes)
+	entryReader := io.LimitReader(entryBuf, int64(len(manifestEntryBytes)))
+	entryReadCloser := ioutil.NopCloser(entryReader)
+	newEntryAddr, err := s.Split(ctx, entryReadCloser, int64(len(manifestEntryBytes)), false)
+	if err != nil {
+		return swarm.ZeroAddress, err
+	}
+
+	return newEntryAddr, nil
 }

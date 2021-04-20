@@ -316,6 +316,23 @@ func (r *Repairer) getOldDirectoryEntry(ctx context.Context, addr swarm.Address)
 		return nil, err
 	}
 
+	entry := new(entry.Entry)
+	err = entry.UnmarshalBinary(buf.Bytes())
+	if err != nil {
+		return nil, err
+	}
+
+	j, _, err = joiner.New(ctx, r.store, entry.Reference())
+	if err != nil {
+		return nil, err
+	}
+
+	buf.Reset()
+	_, err = file.JoinReadAll(ctx, j, buf)
+	if err != nil {
+		return nil, err
+	}
+
 	node := new(mantaray.Node)
 	err = node.UnmarshalBinary(buf.Bytes())
 	if err != nil {

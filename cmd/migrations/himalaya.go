@@ -5,6 +5,11 @@
 package migrations
 
 import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/ethersphere/bee-repair/internal/exporter"
 	"github.com/ethersphere/bee-repair/internal/repair"
 	cmdfile "github.com/ethersphere/bee-repair/pkg/file"
 	"github.com/ethersphere/bee/pkg/logging"
@@ -18,13 +23,14 @@ const (
 )
 
 var (
-	host      string // flag variable, http api host
-	port      int    // flag variable, http api port
-	ssl       bool   // flag variable, uses https for api if set
-	verbosity string // flag variable, debug level
-	encrypted bool   // flag variable, uses encryption
-	pin       bool   // flag variable, pins the repaired content
-	logger    logging.Logger
+	host        string // flag variable, http api host
+	port        int    // flag variable, http api port
+	ssl         bool   // flag variable, uses https for api if set
+	verbosity   string // flag variable, debug level
+	encrypted   bool   // flag variable, uses encryption
+	pin         bool   // flag variable, pins the repaired content
+	dstFilename string // flag variable, debug level
+	logger      logging.Logger
 )
 
 type stdOutProgressUpdater struct {
@@ -101,6 +107,72 @@ The input is the hex representation of the swarm hash passed as argument, the re
 	},
 }
 
+func addRepairCommands(root *cobra.Command) {
+	for _, cmd := range []*cobra.Command{fileRepair, directoryRepair} {
+		cmd.Flags().StringVar(&host, "host", "127.0.0.1", "api host")
+		cmd.Flags().IntVar(&port, "port", 1633, "api port")
+		cmd.Flags().BoolVar(&ssl, "ssl", false, "use ssl")
+		cmd.Flags().BoolVar(&encrypted, "encrypt", false, "use encryption")
+		cmd.Flags().BoolVar(&pin, "pin", false, "pin the repaired content")
+
+		root.AddCommand(cmd)
+	}
+}
+
+type percentUpdater struct {
+	curr, total int
+}
+
+func (p *percentUpdater) start(ctx context.Context) {
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			if p.total != 0 {
+				fmt.Printf("Progress %d %", p.curr*100/p.total)
+			}
+			if p.total != 0 && p.curr == p.total {
+				return
+			}
+			<-time.After(time.Second * 5)
+		}
+	}()
+}
+
+func (p *percentUpdater) Update(current, total int) {
+	p.curr, p.total = current, total
+}
+
+var exportDB = &cobra.Command{
+	Use:   "export-db <database path>",
+	Short: "Export the local database as a tar archive",
+	Long:  `Command is used to export the locally present database as a tar archive.`,
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		updater := &percentUpdater{}
+		updater.start(cmd.Context())
+
+		err := exporter.Export(
+			args[0],
+			exporter.WithDestinationFilename(dstFilename),
+			exporter.WithProgressUpdater(updater),
+		)
+		if err != nil {
+			return err
+		}
+		cmd.Println("Exported database to " + dstFilename)
+		return nil
+	},
+}
+
+func addExportDBCommand(root *cobra.Command) {
+	exportDB.Flags().StringVar(&dstFilename, "destination-file", "swarm-exportdb.tar", "The filename along with complete path to be used for creating archive")
+	root.AddCommand(exportDB)
+}
+
 func InitHimalayaCommands(rootCmd *cobra.Command) {
 	c := &cobra.Command{
 		Use:   "himalaya",
@@ -121,15 +193,10 @@ Example:
 		},
 	}
 
-	c.PersistentFlags().StringVar(&host, "host", "127.0.0.1", "api host")
-	c.PersistentFlags().IntVar(&port, "port", 1633, "api port")
-	c.PersistentFlags().BoolVar(&ssl, "ssl", false, "use ssl")
-	c.PersistentFlags().StringVar(&verbosity, "info", "0", "log verbosity level 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=trace")
-	c.PersistentFlags().BoolVar(&encrypted, "encrypt", false, "use encryption")
-	c.PersistentFlags().BoolVar(&pin, "pin", false, "pin the repaired content")
+	addRepairCommands(c)
+	addExportDBCommand(c)
 
-	c.AddCommand(fileRepair)
-	c.AddCommand(directoryRepair)
+	c.PersistentFlags().StringVar(&verbosity, "info", "0", "log verbosity level 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=trace")
 
 	rootCmd.AddCommand(c)
 }

@@ -29,7 +29,7 @@ var (
 	verbosity   string // flag variable, debug level
 	encrypted   bool   // flag variable, uses encryption
 	pin         bool   // flag variable, pins the repaired content
-	dstFilename string // flag variable, debug level
+	dstFilename string // flag variable, destination file
 	logger      logging.Logger
 )
 
@@ -125,19 +125,23 @@ type percentUpdater struct {
 
 func (p *percentUpdater) start(ctx context.Context) {
 	go func() {
+		complete := false
 		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
 			if p.total != 0 {
-				fmt.Printf("Progress %d %", p.curr*100/p.total)
+				fmt.Printf("Progress %d %%\n", p.curr*100/p.total)
+			}
+			if complete {
+				return
 			}
 			if p.total != 0 && p.curr == p.total {
 				return
 			}
-			<-time.After(time.Second * 5)
+			select {
+			case <-ctx.Done():
+				complete = true
+				// Allow to go through to display last update
+			case <-time.After(time.Second * 5):
+			}
 		}
 	}()
 }

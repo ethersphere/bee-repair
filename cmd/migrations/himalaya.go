@@ -7,6 +7,7 @@ package migrations
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ethersphere/bee-repair/internal/exporter"
@@ -121,32 +122,40 @@ func addRepairCommands(root *cobra.Command) {
 
 type percentUpdater struct {
 	curr, total int
+	mtx         sync.Mutex
 }
 
 func (p *percentUpdater) start(ctx context.Context) {
 	go func() {
 		complete := false
 		for {
-			if p.total != 0 {
-				fmt.Printf("Progress %d %%\n", p.curr*100/p.total)
+			p.mtx.Lock()
+			curr, total := p.curr, p.total
+			p.mtx.Unlock()
+
+			if total != 0 {
+				fmt.Printf("Progress %d %%\n", curr*100/total)
 			}
 			if complete {
 				return
 			}
-			if p.total != 0 && p.curr == p.total {
+			if total != 0 && curr == total {
 				return
 			}
 			select {
 			case <-ctx.Done():
 				complete = true
 				// Allow to go through to display last update
-			case <-time.After(time.Second * 5):
+			case <-time.After(time.Second * 3):
 			}
 		}
 	}()
 }
 
 func (p *percentUpdater) Update(current, total int) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
 	p.curr, p.total = current, total
 }
 

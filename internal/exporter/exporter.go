@@ -4,7 +4,7 @@ import (
 	"archive/tar"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
+	"fmt"
 	"github.com/ethersphere/bee/pkg/shed"
 	"io"
 	"os"
@@ -41,9 +41,13 @@ func WithProgressUpdater(upd ProgressUpdater) Option {
 func Export(src string, opts ...Option) error {
 	e, err := newExporter(src, opts...)
 	if err != nil {
-		return errors.New("Invalid source directory err:" + err.Error())
+		return fmt.Errorf("invalid source directory Err: %w", err)
 	}
-	return e.export()
+	err = e.export()
+	if err != nil {
+		return fmt.Errorf("failed exporting DB Err: %w", err)
+	}
+	return e.close()
 }
 
 type noopUpdater struct{}
@@ -69,8 +73,7 @@ func defaultOpts(e *exporter) {
 func getRetrievalIndex(src string) (index shed.Index, closer io.Closer, err error) {
 	s, e := shed.NewDB(src, nil)
 	if e != nil {
-		err = e
-		return
+		return index, nil, e
 	}
 
 	index, err = s.NewIndex("Address->StoreTimestamp|BinID|Data", shed.IndexFuncs{
@@ -118,8 +121,6 @@ func newExporter(src string, opts ...Option) (*exporter, error) {
 }
 
 func (e *exporter) export() error {
-	defer e.closer.Close()
-
 	total, err := e.retrievalIndex.Count()
 	if err != nil {
 		return err
@@ -165,4 +166,8 @@ func (e *exporter) export() error {
 		e.updater.Update(doneCount, total)
 		return false, nil
 	}, nil)
+}
+
+func (e *exporter) close() error {
+	return e.closer.Close()
 }

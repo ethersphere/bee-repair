@@ -7,6 +7,8 @@ package file_test
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"io/ioutil"
 	"net/http/httptest"
 	"net/url"
@@ -15,7 +17,9 @@ import (
 
 	cmdfile "github.com/ethersphere/bee-repair/pkg/file"
 	"github.com/ethersphere/bee/pkg/api"
+	"github.com/ethersphere/bee/pkg/crypto"
 	"github.com/ethersphere/bee/pkg/logging"
+	mockpost "github.com/ethersphere/bee/pkg/postage/mock"
 	statestore "github.com/ethersphere/bee/pkg/statestore/mock"
 	"github.com/ethersphere/bee/pkg/storage"
 	"github.com/ethersphere/bee/pkg/storage/mock"
@@ -29,13 +33,17 @@ func TestAPIStore(t *testing.T) {
 	storer := mock.NewStorer()
 	ctx := context.Background()
 	srvUrl := newTestServer(t, storer)
+	// create dummy postage batch id
+	batchOk := make([]byte, 32)
+	_, _ = rand.Read(batchOk)
+	batchOkStr := hex.EncodeToString(batchOk)
 
 	host := srvUrl.Hostname()
 	port, err := strconv.Atoi(srvUrl.Port())
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := cmdfile.NewAPIStore(host, port, false)
+	a := cmdfile.NewAPIStore(host, port, false, batchOkStr)
 
 	ch := testingc.GenerateTestRandomChunk()
 	_, err = a.Put(ctx, storage.ModePutUpload, ch)
@@ -80,9 +88,22 @@ func TestLimitWriter(t *testing.T) {
 // newTestServer creates an http server to serve the bee http api endpoints.
 func newTestServer(t *testing.T, storer storage.Storer) *url.URL {
 	t.Helper()
+	pk, _ := crypto.GenerateSecp256k1Key()
+	signer := crypto.NewDefaultSigner(pk)
+
 	logger := logging.New(ioutil.Discard, 0)
 	store := statestore.NewStateStore()
-	s := api.New(tags.NewTags(store, logger), storer, nil, nil, nil, nil, logger, nil, api.Options{})
+
+	s := api.New(
+		tags.NewTags(store, logger),
+		storer,
+		nil, nil, nil, nil, nil,
+		mockpost.New(mockpost.WithAcceptAll()), nil, nil,
+		signer,
+		logger,
+		nil,
+		api.Options{},
+	)
 	ts := httptest.NewServer(s)
 	srvUrl, err := url.Parse(ts.URL)
 	if err != nil {

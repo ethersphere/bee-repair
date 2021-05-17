@@ -89,7 +89,7 @@ func (a *APIStore) Put(ctx context.Context, mode storage.ModePut, chs ...swarm.C
 		if err != nil {
 			return nil, err
 		}
-		if res.StatusCode != http.StatusOK {
+		if res.StatusCode != http.StatusCreated {
 			return nil, fmt.Errorf("upload failed: %v", res.Status)
 		}
 	}

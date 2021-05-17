@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/ethersphere/bee-repair/internal/collection/entry"
 	cmdfile "github.com/ethersphere/bee-repair/pkg/file"
@@ -37,9 +38,9 @@ type Option func(*Repairer)
 
 // WithAPIStore is used to configure the API endpoint for running the utility. This
 // could be locally running bee node or some gateway
-func WithAPIStore(host string, port int, useSSL bool) Option {
+func WithAPIStore(host string, port int, useSSL bool, postageBatchID string) Option {
 	return func(c *Repairer) {
-		c.store = cmdfile.NewAPIStore(host, port, useSSL)
+		c.store = cmdfile.NewAPIStore(host, port, useSSL, postageBatchID)
 	}
 }
 
@@ -89,7 +90,10 @@ func WithProgressUpdater(upd ProgressUpdater) Option {
 //                                |-> File reference
 //
 func FileRepair(ctx context.Context, addr swarm.Address, opts ...Option) (swarm.Address, error) {
-	r := newWithOptions(opts...)
+	r, err := newWithOptions(opts...)
+	if err != nil {
+		return swarm.ZeroAddress, err
+	}
 
 	oldEntry, err := r.getOldFileEntry(ctx, addr)
 	if err != nil {
@@ -153,7 +157,10 @@ func FileRepair(ctx context.Context, addr swarm.Address, opts ...Option) (swarm.
 //                                |-> File reference
 //
 func DirectoryRepair(ctx context.Context, addr swarm.Address, opts ...Option) (swarm.Address, error) {
-	r := newWithOptions(opts...)
+	r, err := newWithOptions(opts...)
+	if err != nil {
+		return swarm.ZeroAddress, err
+	}
 
 	dir, err := r.getOldDirectoryEntry(ctx, addr)
 	if err != nil {
@@ -217,9 +224,6 @@ type noopUpdater struct{}
 func (n *noopUpdater) Update(_ string) {}
 
 func defaultOpts(c *Repairer) {
-	if c.store == nil {
-		c.store = cmdfile.NewAPIStore("127.0.0.1", 1633, false)
-	}
 	if c.updater == nil {
 		c.updater = &noopUpdater{}
 	}
@@ -228,10 +232,13 @@ func defaultOpts(c *Repairer) {
 	}
 }
 
-func newWithOptions(opts ...Option) *Repairer {
+func newWithOptions(opts ...Option) (*Repairer, error) {
 	r := &Repairer{}
 	for _, opt := range opts {
 		opt(r)
+	}
+	if r.store == nil {
+		return nil, errors.New("api store not configured")
 	}
 	defaultOpts(r)
 	mode := storage.ModePutUpload
@@ -239,7 +246,7 @@ func newWithOptions(opts ...Option) *Repairer {
 		mode = storage.ModePutUploadPin
 	}
 	r.ls = loadsave.New(r.store, mode, r.encrypt)
-	return r
+	return r, nil
 }
 
 type fileEntry struct {

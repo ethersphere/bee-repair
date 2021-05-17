@@ -24,14 +24,15 @@ const (
 )
 
 var (
-	host        string // flag variable, http api host
-	port        int    // flag variable, http api port
-	ssl         bool   // flag variable, uses https for api if set
-	verbosity   string // flag variable, debug level
-	encrypted   bool   // flag variable, uses encryption
-	pin         bool   // flag variable, pins the repaired content
-	dstFilename string // flag variable, destination file
-	logger      logging.Logger
+	host           string // flag variable, http api host
+	port           int    // flag variable, http api port
+	ssl            bool   // flag variable, uses https for api if set
+	verbosity      string // flag variable, debug level
+	encrypted      bool   // flag variable, uses encryption
+	pin            bool   // flag variable, pins the repaired content
+	dstFilename    string // flag variable, destination file
+	postageBatchID string // flag variable, postage batch ID
+	logger         logging.Logger
 )
 
 type stdOutProgressUpdater struct {
@@ -62,7 +63,7 @@ The input is the hex representation of the swarm hash passed as argument, the re
 		newReference, err := repair.FileRepair(
 			cmd.Context(),
 			addr,
-			repair.WithAPIStore(host, port, ssl),
+			repair.WithAPIStore(host, port, ssl, postageBatchID),
 			repair.WithLogger(logger),
 			repair.WithEncryption(encrypted),
 			repair.WithProgressUpdater(&stdOutProgressUpdater{cmd}),
@@ -95,7 +96,7 @@ The input is the hex representation of the swarm hash passed as argument, the re
 		newReference, err := repair.DirectoryRepair(
 			cmd.Context(),
 			addr,
-			repair.WithAPIStore(host, port, ssl),
+			repair.WithAPIStore(host, port, ssl, postageBatchID),
 			repair.WithLogger(logger),
 			repair.WithEncryption(encrypted),
 			repair.WithProgressUpdater(&stdOutProgressUpdater{cmd}),
@@ -115,6 +116,7 @@ func addRepairCommands(root *cobra.Command) {
 		cmd.Flags().BoolVar(&ssl, "ssl", false, "use ssl")
 		cmd.Flags().BoolVar(&encrypted, "encrypt", false, "use encryption")
 		cmd.Flags().BoolVar(&pin, "pin", false, "pin the repaired content")
+		cmd.Flags().StringVar(&postageBatchID, "postage-batch-id", "", "postage stamps batch ID")
 
 		root.AddCommand(cmd)
 	}

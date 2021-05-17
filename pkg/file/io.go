@@ -51,10 +51,11 @@ type PutGetter interface {
 type APIStore struct {
 	Client  *http.Client
 	baseUrl string
+	batchID string
 }
 
 // NewAPIStore creates a new APIStore.
-func NewAPIStore(host string, port int, tls bool) PutGetter {
+func NewAPIStore(host string, port int, tls bool, postageBatchID string) PutGetter {
 	scheme := "http"
 	if tls {
 		scheme += "s"
@@ -67,6 +68,7 @@ func NewAPIStore(host string, port int, tls bool) PutGetter {
 	return &APIStore{
 		Client:  http.DefaultClient,
 		baseUrl: u.String(),
+		batchID: postageBatchID,
 	}
 }
 
@@ -80,6 +82,9 @@ func (a *APIStore) Put(ctx context.Context, mode storage.ModePut, chs ...swarm.C
 			return nil, err
 		}
 		req.Header.Set("Content-Type", "application/octet-stream")
+		if a.batchID != "" {
+			req.Header.Set("Swarm-Postage-Batch-Id", a.batchID)
+		}
 		res, err := a.Client.Do(req)
 		if err != nil {
 			return nil, err
